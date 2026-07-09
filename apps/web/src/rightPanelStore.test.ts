@@ -127,6 +127,30 @@ describe("rightPanelStore", () => {
     });
   });
 
+  it("keeps pull requests as a singleton surface", () => {
+    useRightPanelStore.getState().open(refA, "pull-requests");
+    useRightPanelStore.getState().open(refA, "pull-requests");
+    expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      isOpen: true,
+      activeSurfaceId: "pull-requests",
+      surfaces: [
+        { id: "pull-requests", kind: "pull-requests", selectedNumber: null, revealRequestId: 0 },
+      ],
+    });
+  });
+
+  it("opens a pull request detail surface with a selected number", () => {
+    useRightPanelStore.getState().openPullRequest(refA, 392);
+    useRightPanelStore.getState().openPullRequest(refA, 398);
+    expect(selectThreadRightPanelState(useRightPanelStore.getState().byThreadKey, refA)).toEqual({
+      isOpen: true,
+      activeSurfaceId: "pull-requests",
+      surfaces: [
+        { id: "pull-requests", kind: "pull-requests", selectedNumber: 398, revealRequestId: 2 },
+      ],
+    });
+  });
+
   it("replaces the standalone explorer with peer file surfaces", () => {
     useRightPanelStore.getState().open(refA, "files");
     useRightPanelStore.getState().openFile(refA, "src/index.ts");

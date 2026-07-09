@@ -67,6 +67,7 @@ import {
 } from "../markdown-links";
 import { readLocalApi } from "../localApi";
 import { cn } from "../lib/utils";
+import { parseGitHubPullRequestNumber } from "../lib/githubPullRequestLinks";
 import { useRightPanelStore } from "../rightPanelStore";
 import { useActiveEnvironmentId } from "../state/entities";
 import { serverEnvironment } from "../state/server";
@@ -108,6 +109,9 @@ interface ChatMarkdownProps {
   text: string;
   cwd: string | undefined;
   threadRef?: ScopedThreadRef | undefined;
+  onLinkClick?:
+    | ((input: { href: string; event: ReactMouseEvent<HTMLAnchorElement> }) => boolean)
+    | undefined;
   onTaskListChange?: ((input: { markerOffset: number; checked: boolean }) => void) | undefined;
   isStreaming?: boolean;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
@@ -1232,6 +1236,7 @@ function ChatMarkdown({
   text,
   cwd,
   threadRef,
+  onLinkClick,
   onTaskListChange,
   isStreaming = false,
   skills = EMPTY_MARKDOWN_SKILLS,
@@ -1386,6 +1391,20 @@ function ChatMarkdown({
               rel={isSameDocumentLink ? undefined : "noopener noreferrer"}
               onClick={(event) => {
                 onClick?.(event);
+                if (!event.defaultPrevented && href && onLinkClick?.({ href, event })) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  return;
+                }
+                if (!event.defaultPrevented && href && threadRef) {
+                  const pullRequestNumber = parseGitHubPullRequestNumber(href);
+                  if (pullRequestNumber !== null) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    useRightPanelStore.getState().openPullRequest(threadRef, pullRequestNumber);
+                    return;
+                  }
+                }
                 if (isSameDocumentLink && href) {
                   handleMarkdownFragmentClick(event, href);
                 }
@@ -1525,6 +1544,7 @@ function ChatMarkdown({
       isStreaming,
       markdownFileLinkMetaByHref,
       onTaskListChange,
+      onLinkClick,
       openInPreferredEditor,
       openExternalLinkInPreview,
       openMarkdownFileInPreview,

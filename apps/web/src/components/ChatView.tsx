@@ -132,6 +132,7 @@ import { closePreviewSession } from "./preview/closePreviewSession";
 import { subscribePreviewAction } from "./preview/previewActionBus";
 import { getConfiguredPreviewUrls } from "./preview/previewEmptyStateLogic";
 import { RightPanelTabs } from "./RightPanelTabs";
+import { PullRequestInboxPanel } from "./PullRequestInboxPanel";
 import { DiffWorkerPoolProvider } from "./DiffWorkerPoolProvider";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
@@ -2119,6 +2120,52 @@ function ChatViewContent(props: ChatViewProps) {
           environmentId,
           input: { cwd: gitCwd },
         }),
+  );
+  const refreshVcsStatus = useAtomCommand(vcsEnvironment.refreshStatus, {
+    reportFailure: false,
+  });
+  const handlePreparedPullRequestInbox = useCallback(
+    async (input: { branch: string; worktreePath: string | null }) => {
+      if (!activeThreadRef) {
+        return;
+      }
+
+      if (isServerThread && serverThread) {
+        if (serverThread.branch !== input.branch) {
+          await updateThreadMetadata({
+            environmentId: activeThreadRef.environmentId,
+            input: {
+              threadId: activeThreadRef.threadId,
+              branch: input.branch,
+              worktreePath: serverThread.worktreePath,
+            },
+          });
+        }
+      } else if (draftThread && draftThread.branch !== input.branch) {
+        setDraftThreadContext(composerDraftTarget, {
+          branch: input.branch,
+          worktreePath: draftThread.worktreePath,
+        });
+      }
+
+      if (gitCwd !== null) {
+        void refreshVcsStatus({
+          environmentId: activeThreadRef.environmentId,
+          input: { cwd: gitCwd },
+        });
+      }
+    },
+    [
+      activeThreadRef,
+      composerDraftTarget,
+      draftThread,
+      gitCwd,
+      isServerThread,
+      refreshVcsStatus,
+      serverThread,
+      setDraftThreadContext,
+      updateThreadMetadata,
+    ],
   );
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const availableEditors = useAtomValue(primaryServerAvailableEditorsAtom);
@@ -4981,6 +5028,15 @@ function ChatViewContent(props: ChatViewProps) {
         workspaceRoot={activeWorkspaceRoot}
         timestampFormat={timestampFormat}
         mode="embedded"
+      />
+    ) : activeRightPanelSurface?.kind === "pull-requests" ? (
+      <PullRequestInboxPanel
+        environmentId={activeThreadRef.environmentId}
+        cwd={gitCwd}
+        activeThreadRef={activeThreadRef}
+        selectedNumber={activeRightPanelSurface.selectedNumber}
+        revealRequestId={activeRightPanelSurface.revealRequestId}
+        onPrepared={handlePreparedPullRequestInbox}
       />
     ) : (activeRightPanelSurface?.kind === "files" || activeRightPanelSurface?.kind === "file") &&
       activeProject &&

@@ -1,5 +1,5 @@
 import * as Schema from "effect/Schema";
-import { PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
+import { IsoDateTime, PositiveInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import { VcsDriverKind } from "./vcs.ts";
 
 export const SourceControlProviderKind = Schema.Literals([
@@ -63,6 +63,75 @@ export const SourceControlRepositoryLookupInput = Schema.Struct({
   cwd: Schema.optional(TrimmedNonEmptyString),
 });
 export type SourceControlRepositoryLookupInput = typeof SourceControlRepositoryLookupInput.Type;
+
+export const SourceControlChangeRequestChecksStatus = Schema.Literals([
+  "passing",
+  "failing",
+  "pending",
+  "unknown",
+]);
+export type SourceControlChangeRequestChecksStatus =
+  typeof SourceControlChangeRequestChecksStatus.Type;
+
+export const SourceControlChangeRequestListInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  provider: SourceControlProviderKind,
+  state: Schema.optional(Schema.Literals(["open", "closed", "merged", "all"])),
+  limit: Schema.optional(PositiveInt),
+});
+export type SourceControlChangeRequestListInput = typeof SourceControlChangeRequestListInput.Type;
+
+export const SourceControlChangeRequestListItem = Schema.Struct({
+  provider: SourceControlProviderKind,
+  number: PositiveInt,
+  title: TrimmedNonEmptyString,
+  url: TrimmedNonEmptyString,
+  authorLogin: Schema.NullOr(TrimmedNonEmptyString),
+  baseRefName: TrimmedNonEmptyString,
+  headRefName: TrimmedNonEmptyString,
+  state: ChangeRequestState,
+  isDraft: Schema.Boolean,
+  reviewDecision: Schema.NullOr(TrimmedNonEmptyString),
+  checksStatus: SourceControlChangeRequestChecksStatus,
+  updatedAt: Schema.NullOr(IsoDateTime),
+});
+export type SourceControlChangeRequestListItem = typeof SourceControlChangeRequestListItem.Type;
+
+export const SourceControlChangeRequestListResult = Schema.Struct({
+  items: Schema.Array(SourceControlChangeRequestListItem),
+});
+export type SourceControlChangeRequestListResult = typeof SourceControlChangeRequestListResult.Type;
+
+export const SourceControlChangeRequestDetailInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  provider: SourceControlProviderKind,
+  number: PositiveInt,
+});
+export type SourceControlChangeRequestDetailInput =
+  typeof SourceControlChangeRequestDetailInput.Type;
+
+export const SourceControlChangeRequestTimelineEntry = Schema.Struct({
+  kind: Schema.Literals(["comment", "review", "inline-comment"]),
+  authorLogin: Schema.NullOr(TrimmedNonEmptyString),
+  body: Schema.String,
+  url: Schema.NullOr(Schema.String),
+  state: Schema.NullOr(TrimmedNonEmptyString),
+  createdAt: Schema.NullOr(IsoDateTime),
+  path: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  line: Schema.optional(Schema.NullOr(PositiveInt)),
+  originalLine: Schema.optional(Schema.NullOr(PositiveInt)),
+  diffHunk: Schema.optional(Schema.NullOr(Schema.String)),
+});
+export type SourceControlChangeRequestTimelineEntry =
+  typeof SourceControlChangeRequestTimelineEntry.Type;
+
+export const SourceControlChangeRequestDetailResult = Schema.Struct({
+  item: SourceControlChangeRequestListItem,
+  body: Schema.NullOr(Schema.String),
+  timeline: Schema.Array(SourceControlChangeRequestTimelineEntry),
+});
+export type SourceControlChangeRequestDetailResult =
+  typeof SourceControlChangeRequestDetailResult.Type;
 
 export const SourceControlCloneRepositoryInput = Schema.Struct({
   provider: Schema.optional(SourceControlProviderKind),

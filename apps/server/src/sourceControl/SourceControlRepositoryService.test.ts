@@ -11,6 +11,7 @@ import { GitCommandError, SourceControlProviderError } from "@t3tools/contracts"
 
 import * as ServerConfig from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
+import * as GitHubCli from "./GitHubCli.ts";
 import type * as SourceControlProvider from "./SourceControlProvider.ts";
 import * as SourceControlProviderRegistry from "./SourceControlProviderRegistry.ts";
 import * as SourceControlRepositoryService from "./SourceControlRepositoryService.ts";
@@ -56,6 +57,7 @@ function processOutput(): GitVcsDriver.ExecuteGitResult {
 function makeLayer(input: {
   readonly provider?: SourceControlProvider.SourceControlProvider["Service"];
   readonly git?: Partial<GitVcsDriver.GitVcsDriver["Service"]>;
+  readonly github?: Partial<GitHubCli.GitHubCli["Service"]>;
   readonly fileSystem?: FileSystem.FileSystem;
 }) {
   const serviceLayer = SourceControlRepositoryService.layer.pipe(
@@ -76,6 +78,19 @@ function makeLayer(input: {
             setUpstream: true,
           }),
         ...input.git,
+      }),
+    ),
+    Layer.provide(
+      Layer.mock(GitHubCli.GitHubCli)({
+        execute: () =>
+          Effect.succeed({
+            exitCode: ChildProcessSpawner.ExitCode(0),
+            stdout: "[]",
+            stderr: "",
+            stdoutTruncated: false,
+            stderrTruncated: false,
+          }),
+        ...input.github,
       }),
     ),
     Layer.provide(
@@ -115,6 +130,185 @@ it.effect("looks up repositories through the requested provider without search",
     assert.deepStrictEqual(result, { provider: "github", ...CLONE_URLS });
     assert.deepStrictEqual(calls, [{ cwd: "/workspace", repository: "octocat/t3code" }]);
   }).pipe(Effect.provide(makeLayer({ provider })));
+});
+
+it.effect("lists GitHub pull requests for the current repository", () => {
+  const calls: ReadonlyArray<string>[] = [];
+
+  return Effect.gen(function* () {
+    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
+    const result = yield* service.listChangeRequests({
+      cwd: "/workspace",
+      provider: "github",
+      state: "open",
+      limit: 25,
+    });
+
+    assert.deepStrictEqual(calls, [
+      [
+        "pr",
+        "list",
+        "--state",
+        "open",
+        "--limit",
+        "25",
+        "--json",
+        "number,title,url,author,baseRefName,headRefName,state,mergedAt,isDraft,reviewDecision,updatedAt,statusCheckRollup",
+      ],
+    ]);
+    assert.deepStrictEqual(result, {
+      items: [
+        {
+          provider: "github",
+          number: 42,
+          title: "Tighten PR inbox",
+          url: "https://github.com/octocat/t3code/pull/42",
+          authorLogin: "mona",
+          baseRefName: "main",
+          headRefName: "feature/pr-inbox",
+          state: "open",
+          isDraft: false,
+          reviewDecision: "REVIEW_REQUIRED",
+          checksStatus: "failing",
+          updatedAt: "2026-07-09T10:00:00Z",
+        },
+      ],
+    });
+  }).pipe(
+    Effect.provide(
+      makeLayer({
+        github: {
+          execute: (input) =>
+            Effect.sync(() => {
+              calls.push(input.args);
+              return {
+                exitCode: ChildProcessSpawner.ExitCode(0),
+                stdout:
+                  '[{"number":42,"title":"Tighten PR inbox","url":"https://github.com/octocat/t3code/pull/42","author":{"login":"mona"},"baseRefName":"main","headRefName":"feature/pr-inbox","state":"OPEN","mergedAt":null,"isDraft":false,"reviewDecision":"REVIEW_REQUIRED","updatedAt":"2026-07-09T10:00:00Z","statusCheckRollup":[{"conclusion":"FAILURE"}]}]',
+                stderr: "",
+                stdoutTruncated: false,
+                stderrTruncated: false,
+              };
+            }),
+        },
+      }),
+    ),
+  );
+});
+
+it.effect("rejects pull request listing for unsupported source control providers", () =>
+  Effect.gen(function* () {
+    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
+    const error = yield* service
+      .listChangeRequests({
+        cwd: "/workspace",
+        provider: "gitlab",
+      })
+      .pipe(Effect.flip);
+
+    assert.strictEqual(error.operation, "listChangeRequests");
+    assert.strictEqual(error.provider, "gitlab");
+    assert.strictEqual(
+      error.detail,
+      "Pull request management currently supports GitHub repositories.",
+    );
+  }).pipe(Effect.provide(makeLayer({}))),
+);
+
+it.effect("gets GitHub pull request details with comments and reviews", () => {
+  const calls: ReadonlyArray<string>[] = [];
+
+  return Effect.gen(function* () {
+    const service = yield* SourceControlRepositoryService.SourceControlRepositoryService;
+    const result = yield* service.getChangeRequest({
+      cwd: "/workspace",
+      provider: "github",
+      number: 42,
+    });
+
+    assert.deepStrictEqual(calls, [
+      [
+        "pr",
+        "view",
+        "42",
+        "--json",
+        "number,title,url,author,baseRefName,headRefName,state,mergedAt,isDraft,reviewDecision,updatedAt,statusCheckRollup,body,comments,reviews",
+      ],
+      ["repo", "view", "--json", "nameWithOwner"],
+      ["api", "repos/octocat/t3code/pulls/42/comments?per_page=100"],
+    ]);
+    assert.deepStrictEqual(result, {
+      item: {
+        provider: "github",
+        number: 42,
+        title: "Tighten PR inbox",
+        url: "https://github.com/octocat/t3code/pull/42",
+        authorLogin: "mona",
+        baseRefName: "main",
+        headRefName: "feature/pr-inbox",
+        state: "open",
+        isDraft: false,
+        reviewDecision: "REVIEW_REQUIRED",
+        checksStatus: "passing",
+        updatedAt: "2026-07-09T10:00:00Z",
+      },
+      body: "Adds a PR inbox.",
+      timeline: [
+        {
+          kind: "comment",
+          authorLogin: "mona",
+          body: "Can this move to the right panel?",
+          url: "https://github.com/octocat/t3code/pull/42#issuecomment-1",
+          state: null,
+          createdAt: "2026-07-09T10:01:00Z",
+        },
+        {
+          kind: "review",
+          authorLogin: "hubot",
+          body: "Looks better.",
+          url: "https://github.com/octocat/t3code/pull/42#pullrequestreview-1",
+          state: "APPROVED",
+          createdAt: "2026-07-09T10:02:00Z",
+        },
+        {
+          kind: "inline-comment",
+          authorLogin: "copilot",
+          body: "This branch name wraps badly in the panel.",
+          url: "https://github.com/octocat/t3code/pull/42#discussion_r1",
+          state: null,
+          createdAt: "2026-07-09T10:03:00Z",
+          path: "apps/web/src/components/PullRequestInboxPanel.tsx",
+          line: 144,
+          originalLine: 140,
+          diffHunk: "@@ -140,3 +140,3 @@",
+        },
+      ],
+    });
+  }).pipe(
+    Effect.provide(
+      makeLayer({
+        github: {
+          execute: (input) =>
+            Effect.sync(() => {
+              calls.push(input.args);
+              const stdout =
+                input.args[0] === "repo"
+                  ? '{"nameWithOwner":"octocat/t3code"}'
+                  : input.args[0] === "api"
+                    ? '[{"user":{"login":"copilot"},"body":"This branch name wraps badly in the panel.","html_url":"https://github.com/octocat/t3code/pull/42#discussion_r1","created_at":"2026-07-09T10:03:00Z","path":"apps/web/src/components/PullRequestInboxPanel.tsx","line":144,"original_line":140,"diff_hunk":"@@ -140,3 +140,3 @@"}]'
+                    : '{"number":42,"title":"Tighten PR inbox","url":"https://github.com/octocat/t3code/pull/42","author":{"login":"mona"},"baseRefName":"main","headRefName":"feature/pr-inbox","state":"OPEN","mergedAt":null,"isDraft":false,"reviewDecision":"REVIEW_REQUIRED","updatedAt":"2026-07-09T10:00:00Z","statusCheckRollup":[{"conclusion":"SUCCESS"}],"body":"Adds a PR inbox.","comments":[{"author":{"login":"mona"},"body":"Can this move to the right panel?","url":"https://github.com/octocat/t3code/pull/42#issuecomment-1","createdAt":"2026-07-09T10:01:00Z"}],"reviews":[{"author":{"login":"hubot"},"body":"Looks better.","url":"https://github.com/octocat/t3code/pull/42#pullrequestreview-1","state":"APPROVED","submittedAt":"2026-07-09T10:02:00Z"}]}';
+              return {
+                exitCode: ChildProcessSpawner.ExitCode(0),
+                stdout,
+                stderr: "",
+                stdoutTruncated: false,
+                stderrTruncated: false,
+              };
+            }),
+        },
+      }),
+    ),
+  );
 });
 
 it.effect("preserves provider failures without deriving the repository message from them", () => {

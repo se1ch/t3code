@@ -135,6 +135,10 @@ import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./sett
 import {
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
+  SourceControlChangeRequestDetailInput,
+  SourceControlChangeRequestDetailResult,
+  SourceControlChangeRequestListInput,
+  SourceControlChangeRequestListResult,
   SourceControlDiscoveryResult,
   SourceControlPublishRepositoryInput,
   SourceControlPublishRepositoryResult,
@@ -222,6 +226,8 @@ export const WS_METHODS = {
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlCloneRepository: "sourceControl.cloneRepository",
   sourceControlPublishRepository: "sourceControl.publishRepository",
+  sourceControlListChangeRequests: "sourceControl.listChangeRequests",
+  sourceControlGetChangeRequest: "sourceControl.getChangeRequest",
 
   // Streaming subscriptions
   subscribeVcsStatus: "subscribeVcsStatus",
@@ -350,6 +356,24 @@ export const WsSourceControlPublishRepositoryRpc = Rpc.make(
   {
     payload: SourceControlPublishRepositoryInput,
     success: SourceControlPublishRepositoryResult,
+    error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
+  },
+);
+
+export const WsSourceControlListChangeRequestsRpc = Rpc.make(
+  WS_METHODS.sourceControlListChangeRequests,
+  {
+    payload: SourceControlChangeRequestListInput,
+    success: SourceControlChangeRequestListResult,
+    error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
+  },
+);
+
+export const WsSourceControlGetChangeRequestRpc = Rpc.make(
+  WS_METHODS.sourceControlGetChangeRequest,
+  {
+    payload: SourceControlChangeRequestDetailInput,
+    success: SourceControlChangeRequestDetailResult,
     error: Schema.Union([SourceControlRepositoryError, EnvironmentAuthorizationError]),
   },
 );
@@ -699,6 +723,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
+  WsSourceControlListChangeRequestsRpc,
+  WsSourceControlGetChangeRequestRpc,
   WsProjectsListEntriesRpc,
   WsProjectsReadFileRpc,
   WsProjectsSearchEntriesRpc,

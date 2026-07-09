@@ -14,7 +14,15 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { resolveStorage } from "./lib/storage";
 
-export const RIGHT_PANEL_KINDS = ["plan", "diff", "files", "file", "preview", "terminal"] as const;
+export const RIGHT_PANEL_KINDS = [
+  "plan",
+  "diff",
+  "files",
+  "file",
+  "preview",
+  "terminal",
+  "pull-requests",
+] as const;
 export type RightPanelKind = (typeof RIGHT_PANEL_KINDS)[number];
 
 export type RightPanelSurface =
@@ -30,6 +38,12 @@ export type RightPanelSurface =
     }
   | { id: "diff"; kind: "diff" }
   | { id: "files"; kind: "files" }
+  | {
+      id: "pull-requests";
+      kind: "pull-requests";
+      selectedNumber: number | null;
+      revealRequestId: number;
+    }
   | {
       id: `file:${string}`;
       kind: "file";
@@ -53,6 +67,7 @@ interface RightPanelStoreState {
   open: (ref: ScopedThreadRef, kind: Exclude<RightPanelKind, "file" | "terminal">) => void;
   openBrowser: (ref: ScopedThreadRef, tabId: string | null) => void;
   openFile: (ref: ScopedThreadRef, relativePath: string, line?: number) => void;
+  openPullRequest: (ref: ScopedThreadRef, number: number) => void;
   openTerminal: (ref: ScopedThreadRef, terminalId: string) => void;
   splitTerminal: (
     ref: ScopedThreadRef,
@@ -92,8 +107,17 @@ const singletonSurface = (
       return { id: "files", kind };
     case "plan":
       return { id: "plan", kind };
+    case "pull-requests":
+      return { id: "pull-requests", kind, selectedNumber: null, revealRequestId: 0 };
   }
 };
+
+const pullRequestSurface = (number: number | null, revealRequestId: number): RightPanelSurface => ({
+  id: "pull-requests",
+  kind: "pull-requests",
+  selectedNumber: number,
+  revealRequestId,
+});
 
 const browserSurface = (tabId: string | null): RightPanelSurface =>
   tabId
@@ -183,6 +207,23 @@ export function migratePersistedRightPanelState(persistedState: unknown): {
                           ? surface.revealRequestId
                           : 0;
                       return [{ ...surface, revealLine, revealRequestId }];
+                    }
+                    if (surface.kind === "pull-requests") {
+                      const selectedNumber =
+                        "selectedNumber" in surface &&
+                        typeof surface.selectedNumber === "number" &&
+                        Number.isSafeInteger(surface.selectedNumber) &&
+                        surface.selectedNumber > 0
+                          ? surface.selectedNumber
+                          : null;
+                      const revealRequestId =
+                        "revealRequestId" in surface &&
+                        typeof surface.revealRequestId === "number" &&
+                        Number.isSafeInteger(surface.revealRequestId) &&
+                        surface.revealRequestId >= 0
+                          ? surface.revealRequestId
+                          : 0;
+                      return [pullRequestSurface(selectedNumber, revealRequestId)];
                     }
                     if (surface.kind !== "terminal") return [surface];
                     if (
@@ -283,6 +324,23 @@ export const useRightPanelStore = create<RightPanelStoreState>()(
                     entry.id === surface.id ? surface : entry,
                   )
                 : [...withoutStandaloneExplorer, surface],
+            };
+          }),
+        })),
+      openPullRequest: (ref, number) =>
+        set((state) => ({
+          byThreadKey: updateThread(state.byThreadKey, scopedThreadKey(ref), (current) => {
+            const existing = current.surfaces.find(
+              (surface): surface is Extract<RightPanelSurface, { kind: "pull-requests" }> =>
+                surface.kind === "pull-requests",
+            );
+            const surface = pullRequestSurface(number, (existing?.revealRequestId ?? 0) + 1);
+            return {
+              isOpen: true,
+              activeSurfaceId: surface.id,
+              surfaces: existing
+                ? current.surfaces.map((entry) => (entry.id === surface.id ? surface : entry))
+                : [...current.surfaces, surface],
             };
           }),
         })),

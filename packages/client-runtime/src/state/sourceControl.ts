@@ -37,5 +37,15 @@ export function createSourceControlEnvironmentAtoms<R, E>(
       scheduler: vcsCommandScheduler,
       concurrency: vcsCommandConcurrency,
     }),
+    changeRequests: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:source-control:change-requests",
+      tag: WS_METHODS.sourceControlListChangeRequests,
+      staleTimeMs: 15_000,
+    }),
+    changeRequest: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:source-control:change-request",
+      tag: WS_METHODS.sourceControlGetChangeRequest,
+      staleTimeMs: 15_000,
+    }),
   };
 }

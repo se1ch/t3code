@@ -106,6 +106,10 @@ import type { ClientSettings, ServerSettings, ServerSettingsPatch } from "./sett
 import type {
   SourceControlCloneRepositoryInput,
   SourceControlCloneRepositoryResult,
+  SourceControlChangeRequestDetailInput,
+  SourceControlChangeRequestDetailResult,
+  SourceControlChangeRequestListInput,
+  SourceControlChangeRequestListResult,
   SourceControlDiscoveryResult,
   SourceControlPublishRepositoryInput,
   SourceControlPublishRepositoryResult,
@@ -1176,6 +1180,12 @@ export interface EnvironmentApi {
     publishRepository: (
       input: SourceControlPublishRepositoryInput,
     ) => Promise<SourceControlPublishRepositoryResult>;
+    listChangeRequests: (
+      input: SourceControlChangeRequestListInput,
+    ) => Promise<SourceControlChangeRequestListResult>;
+    getChangeRequest: (
+      input: SourceControlChangeRequestDetailInput,
+    ) => Promise<SourceControlChangeRequestDetailResult>;
   };
   vcs: {
     listRefs: (input: VcsListRefsInput) => Promise<VcsListRefsResult>;

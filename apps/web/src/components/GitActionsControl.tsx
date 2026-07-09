@@ -29,6 +29,7 @@ import {
   InfoIcon,
   LockIcon,
   GlobeIcon,
+  GitPullRequestIcon,
 } from "lucide-react";
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
 import { AzureDevOpsIcon, BitbucketIcon, GitHubIcon, GitLabIcon } from "~/components/Icons";
@@ -87,6 +88,7 @@ import { randomUUID } from "~/lib/utils";
 import { resolvePathLinkTarget } from "~/terminal-links";
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { readLocalApi } from "~/localApi";
+import { useRightPanelStore } from "~/rightPanelStore";
 import { getSourceControlPresentation } from "~/sourceControlPresentation";
 import { openPullRequestLink } from "~/lib/openPullRequestLink";
 
@@ -1650,6 +1652,11 @@ export default function GitActionsControl({
   );
 
   const canPublishRepository = isRepo && gitStatusForActions !== null && !hasPrimaryRemote;
+  const canShowPullRequestInbox =
+    isRepo &&
+    hasPrimaryRemote &&
+    gitStatusForActions?.sourceControlProvider?.kind === "github" &&
+    activeThreadRef !== null;
 
   if (!gitCwd) return null;
 
@@ -1781,6 +1788,18 @@ export default function GitActionsControl({
                   </MenuItem>
                 );
               })}
+              {canShowPullRequestInbox ? (
+                <MenuItem
+                  disabled={isGitActionRunning}
+                  onClick={() => {
+                    if (!activeThreadRef) return;
+                    useRightPanelStore.getState().open(activeThreadRef, "pull-requests");
+                  }}
+                >
+                  <GitPullRequestIcon />
+                  Pull requests...
+                </MenuItem>
+              ) : null}
               {canPublishRepository ? (
                 <MenuItem
                   disabled={isGitActionRunning}

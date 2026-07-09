@@ -301,6 +301,8 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.sourceControlLookupRepository, AuthOrchestrationReadScope],
   [WS_METHODS.sourceControlCloneRepository, AuthOrchestrationOperateScope],
   [WS_METHODS.sourceControlPublishRepository, AuthOrchestrationOperateScope],
+  [WS_METHODS.sourceControlListChangeRequests, AuthOrchestrationReadScope],
+  [WS_METHODS.sourceControlGetChangeRequest, AuthOrchestrationReadScope],
   [WS_METHODS.projectsListEntries, AuthOrchestrationReadScope],
   [WS_METHODS.projectsReadFile, AuthOrchestrationReadScope],
   [WS_METHODS.projectsSearchEntries, AuthOrchestrationReadScope],
@@ -1387,6 +1389,22 @@ const makeWsRpcLayer = (
             sourceControlRepositories
               .publishRepository(input)
               .pipe(Effect.tap(() => refreshGitStatus(input.cwd))),
+            {
+              "rpc.aggregate": "source-control",
+            },
+          ),
+        [WS_METHODS.sourceControlListChangeRequests]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.sourceControlListChangeRequests,
+            sourceControlRepositories.listChangeRequests(input),
+            {
+              "rpc.aggregate": "source-control",
+            },
+          ),
+        [WS_METHODS.sourceControlGetChangeRequest]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.sourceControlGetChangeRequest,
+            sourceControlRepositories.getChangeRequest(input),
             {
               "rpc.aggregate": "source-control",
             },
